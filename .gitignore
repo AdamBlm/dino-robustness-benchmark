@@ -8,5 +8,4 @@ logs/
 slurm_logs/
 slurm/
 src/__pycache__/
-*.sh
 
