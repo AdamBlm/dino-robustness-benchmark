@@ -172,7 +172,7 @@ python src/plot_compare.py \
 
 ## Environment and hardware
 - Python: see `requirements.txt` (you might need to install PyTorch/torchvision per your CUDA setup).
-- GPU highly recommended. Batch size 256 fits should fit commonly available 12 GB GPUs; reduce if OOM.
+- GPU highly recommended. Batch size 256 should fit commonly available 12 GB GPUs; reduce if OOM.
 - Mixed precision is enabled by default in feature extraction; disable via `--no_amp`.
 - Performance note: DINOv2 (ViT-B/14) feature extraction is noticeably slower than CLIP or MAE on the same hardware.
 
@@ -185,10 +185,11 @@ python src/plot_compare.py \
 ---
 
 ## Conclusion
-- **DINOv2** learns the most robust and linearly separable features.
-- **CLIP** performs well on clean data but is **less robust to corruptions**, especially noise.
-- **MAE** struggles under distribution shift due to its reconstruction objective.
-- **Self-distillation > contrastive > reconstruction** for robustness in ViT embeddings.
+- **DINOv2** learns the most robust and linearly separable representations but is significantly slower (~10×) in feature extraction compared to CLIP.
+- **CLIP** offers a strong trade-off between accuracy, robustness, and compute efficiency.
+- **MAE** is lightweight but struggles with semantic robustness due to its reconstruction objective.
+- **Trade-off summary:** Robustness (DINOv2) vs Efficiency (CLIP) vs Simplicity (MAE).
+
 
 ## Future Work
 - Add **iBOT** and **MaskFeat** for stronger SSL comparison
