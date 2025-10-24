@@ -1,0 +1,16 @@
+{
+  "model": "vit_base_patch14_dinov2.lvd142m",
+  "search_Cs": [
+    0.01,
+    0.1,
+    1.0,
+    10.0,
+    100.0
+  ],
+  "best_C": 0.01,
+  "val_acc": 99.06,
+  "test_acc": 98.78,
+  "scaled": true,
+  "refit_on_full": true,
+  "seed": 42
+}

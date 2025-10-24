@@ -1,41 +1,34 @@
-"""
-k-NN evaluation on frozen features.
-"""
-from __future__ import annotations
 import os
 import json
 import argparse
-from typing import Dict, Tuple
 
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics import accuracy_score
 
 
-def load_split(in_dir: str, model: str, split: str) -> Tuple[np.ndarray, np.ndarray]:
+def load_split(in_dir, model, split):
     d = os.path.join(in_dir, model)
     X = np.load(os.path.join(d, f"{split}_X.npy"))
     y = np.load(os.path.join(d, f"{split}_y.npy"))
     return X, y
 
 
-def l2_normalize(X: np.ndarray, eps: float = 1e-12) -> np.ndarray:
+def l2_normalize(X, eps=1e-12):
     n = np.linalg.norm(X, axis=1, keepdims=True)
     n = np.maximum(n, eps)
     return X / n
 
 
 def knn_predict(
-    X_db: np.ndarray,
-    y_db: np.ndarray,
-    X_q: np.ndarray,
-    k: int = 20,
-    metric: str = "cosine",
-    weighted: bool = True,
-    batch_size: int = 8192,
-) -> np.ndarray:
-    """kNN prediction with cosine or euclidean distance."""
-    # Build index
+    X_db,
+    y_db,
+    X_q,
+    k=20,
+    metric="cosine",
+    weighted=True,
+    batch_size=8192,
+):
     nn = NearestNeighbors(n_neighbors=k, metric=metric, n_jobs=-1)
     nn.fit(X_db)
 
@@ -54,7 +47,6 @@ def knn_predict(
         else:
             weights = np.ones_like(dists)
 
-        # Vote per class
         batch_pred = []
         for labels_row, w_row in zip(neigh_labels, weights):
             c = int(labels_row.max()) + 1
@@ -80,12 +72,10 @@ def main():
     exp_dir = os.path.join(args.out_dir, args.model)
     os.makedirs(exp_dir, exist_ok=True)
 
-    # Load features
     Xtr, ytr = load_split(args.in_dir, args.model, "train")
     Xva, yva = load_split(args.in_dir, args.model, "val")
     Xte, yte = load_split(args.in_dir, args.model, "test")
 
-    # Optional CIFAR-10-C
     c10c_path = os.path.join(args.in_dir, args.model, "cifar10c_X.npy")
     has_c10c = os.path.isfile(c10c_path)
     if has_c10c:

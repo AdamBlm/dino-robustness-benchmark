@@ -1,0 +1,16 @@
+{
+  "model": "vit_base_patch16_224.mae",
+  "search_Cs": [
+    0.01,
+    0.1,
+    1.0,
+    10.0,
+    100.0
+  ],
+  "best_C": 0.1,
+  "val_acc": 89.46,
+  "test_acc": 88.14,
+  "scaled": true,
+  "refit_on_full": true,
+  "seed": 42
+}

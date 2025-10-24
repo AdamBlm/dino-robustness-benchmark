@@ -7,10 +7,10 @@ matplotlib
 pillow
 pyyaml
 
-# --- PyTorch (installed separately with CUDA 13) ---
-# torch
-# torchvision
-# torchaudio
+# --- PyTorch  ---
+torch
+torchvision
+torchaudio
 
 # --- ML / Training Utils ---
 scikit-learn
@@ -21,7 +21,6 @@ optuna
 wandb
 
 # --- Data ---
-torchvision
 requests
 
 # --- Robustness Benchmark ---

@@ -1,11 +1,6 @@
-"""
-Train a linear classifier on frozen features.
-"""
-from __future__ import annotations
 import os
 import json
 import argparse
-from typing import Dict, Any, Tuple
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression
@@ -15,14 +10,14 @@ from sklearn.metrics import accuracy_score
 from joblib import dump
 
 
-def load_split(in_dir: str, model: str, split: str) -> Tuple[np.ndarray, np.ndarray]:
+def load_split(in_dir, model, split):
     d = os.path.join(in_dir, model)
     X = np.load(os.path.join(d, f"{split}_X.npy"))
     y = np.load(os.path.join(d, f"{split}_y.npy"))
     return X, y
 
 
-def evaluate(clf, X: np.ndarray, y: np.ndarray) -> Dict[str, Any]:
+def evaluate(clf, X, y):
     yhat = clf.predict(X)
     acc = float(accuracy_score(y, yhat) * 100.0)
     return {"acc": acc, "yhat": yhat}
@@ -44,12 +39,10 @@ def main():
     ap.add_argument("--verbose", type=int, default=0, help="verbosity level for solver")
     args = ap.parse_args()
 
-    # IO setup
     os.makedirs(args.out_dir, exist_ok=True)
     exp_dir = os.path.join(args.out_dir, args.model)
     os.makedirs(exp_dir, exist_ok=True)
 
-    # Load splits
     Xtr, ytr = load_split(args.in_dir, args.model, "train")
     Xva, yva = load_split(args.in_dir, args.model, "val")
     Xte, yte = load_split(args.in_dir, args.model, "test")

@@ -1,0 +1,16 @@
+{
+  "model": "vit_base_patch16_clip_224.openai",
+  "search_Cs": [
+    0.01,
+    0.1,
+    1.0,
+    10.0,
+    100.0
+  ],
+  "best_C": 0.01,
+  "val_acc": 95.96,
+  "test_acc": 95.44,
+  "scaled": true,
+  "refit_on_full": true,
+  "seed": 42
+}

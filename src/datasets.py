@@ -1,11 +1,5 @@
-"""
-Data utilities for CIFAR-10 and CIFAR-10-C.
-"""
-
-from __future__ import annotations
 import os
 import json
-from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -24,15 +18,7 @@ from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
 
 
-# ----------------------------
-# Transforms / timm utilities
-# ----------------------------
-
-def build_transform_for_model(model_name: str, is_train: bool = False) -> T.Compose:
-    """
-    Creates a transform for a timm model.
-    No augmentations, just resizing and normalization.
-    """
+def build_transform_for_model(model_name, is_train=False):
     model = timm.create_model(model_name, pretrained=False, num_classes=0)
     cfg = resolve_data_config({}, model=model)
 
@@ -53,18 +39,11 @@ def build_transform_for_model(model_name: str, is_train: bool = False) -> T.Comp
     return T.Compose([tfm])
 
 
-# ----------------------------
-# CIFAR-10 loaders
-# ----------------------------
-
 def _stratified_split_indices(
-    targets: List[int],
-    val_size: int = 5000,
-    seed: int = 42,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Stratified split for CIFAR-10 train set.
-    """
+    targets,
+    val_size=5000,
+    seed=42,
+):
     y = np.array(targets)
     n = len(y)
     if isinstance(val_size, float) and 0 < val_size < 1:
@@ -89,17 +68,14 @@ def _stratified_split_indices(
 
 
 def get_cifar10_dataloaders(
-    data_root: str,
-    model_name: str,
-    batch_size: int = 256,
-    num_workers: int = 4,
-    val_size: int = 5000,
-    seed: int = 42,
-    pin_memory: bool = True,
-) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    """
-    Gets CIFAR-10 train/val/test DataLoaders.
-    """
+    data_root,
+    model_name,
+    batch_size=256,
+    num_workers=4,
+    val_size=5000,
+    seed=42,
+    pin_memory=True,
+):
     os.makedirs(data_root, exist_ok=True)
     tfm = build_transform_for_model(model_name, is_train=False)
 
@@ -110,7 +86,6 @@ def get_cifar10_dataloaders(
     ds_train = Subset(ds_train_full, train_idx.tolist())
     ds_val = Subset(ds_train_full, val_idx.tolist())
 
-    # Save split indices for reproducibility
     split_dir = os.path.join(data_root, "cifar10_splits")
     os.makedirs(split_dir, exist_ok=True)
     with open(os.path.join(split_dir, f"split_seed{seed}_val{val_size}.json"), "w") as f:
@@ -130,10 +105,6 @@ def get_cifar10_dataloaders(
     return train_loader, val_loader, test_loader
 
 
-# ----------------------------
-# CIFAR-10-C dataset / loader
-# ----------------------------
-
 _CIFAR10C_CORRUPTIONS = [
     "brightness", "contrast", "defocus_blur", "elastic_transform", "fog", "frost",
     "gaussian_blur", "gaussian_noise", "glass_blur", "impulse_noise", "jpeg_compression",
@@ -141,21 +112,16 @@ _CIFAR10C_CORRUPTIONS = [
 ]
 
 class CIFAR10C(Dataset):
-    """
-    CIFAR-10-C dataset.
-    Handles loading corrupted images from .npy files.
-    """
     def __init__(
         self,
-        root: str,
-        model_name: str,
-        corruptions: Optional[List[str]] = None,
-        severities: Optional[List[int]] = None,
+        root,
+        model_name,
+        corruptions=None,
+        severities=None,
     ):
         super().__init__()
         self.root = os.path.join(root, "CIFAR-10-C")
         if not os.path.isdir(self.root):
-            # Common alternative folder name
             alt = os.path.join(root, "cifar10-c")
             if os.path.isdir(alt):
                 self.root = alt
@@ -176,7 +142,6 @@ class CIFAR10C(Dataset):
         self.corruptions = corruptions or _CIFAR10C_CORRUPTIONS
         self.severities = severities or [1, 2, 3, 4, 5]
 
-        # Filter to existing corruptions in the folder
         existing = []
         for c in self.corruptions:
             p = os.path.join(self.root, f"{c}.npy")
@@ -190,26 +155,26 @@ class CIFAR10C(Dataset):
                 print(f"[datasets.py] Warning: Missing corruptions: {missing}")
             self.corruptions = existing
 
-        # Build an index of (corruption_name, severity, local_idx)
-        self.index_map: List[Tuple[str, int, int]] = []
-        for cname in self.corruptions:
+        self.index_map = []
+        for cid, cname in enumerate(self.corruptions):
             for s in self.severities:
                 sl = self._severity_slices[s]
                 for i in range(sl.start, sl.stop):
                     local = i - sl.start
-                    self.index_map.append((cname, s, local))
+                    self.index_map.append((cid, s, local))
 
         self.transform = build_transform_for_model(model_name, is_train=False)
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self.index_map)
 
-    def _load_corruption_block(self, cname: str) -> np.ndarray:
+    def _load_corruption_block(self, cname):
         path = os.path.join(self.root, f"{cname}.npy")
         return np.load(path, mmap_mode="r")
 
-    def __getitem__(self, idx: int):
-        cname, severity, local_idx = self.index_map[idx]
+    def __getitem__(self, idx):
+        cid, severity, local_idx = self.index_map[idx]
+        cname = self.corruptions[cid]
         arr = self._load_corruption_block(cname)
         sl = slice(10000*(severity-1), 10000*severity)
         img_np = arr[sl][local_idx]
@@ -217,21 +182,18 @@ class CIFAR10C(Dataset):
 
         pil = T.functional.to_pil_image(img_np)
         x = self.transform(pil)
-        return x, label
+        return x, label, int(cid), int(severity)
 
 
 def get_cifar10c_loader(
-    data_root: str,
-    model_name: str,
-    batch_size: int = 256,
-    num_workers: int = 4,
-    corruptions: Optional[List[str]] = None,
-    severities: Optional[List[int]] = None,
-    pin_memory: bool = True,
-) -> DataLoader:
-    """
-    Returns a DataLoader for CIFAR-10-C.
-    """
+    data_root,
+    model_name,
+    batch_size=256,
+    num_workers=4,
+    corruptions=None,
+    severities=None,
+    pin_memory=True,
+):
     ds = CIFAR10C(
         root=data_root,
         model_name=model_name,

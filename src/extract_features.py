@@ -1,7 +1,3 @@
-"""
-Extract frozen features from a timm backbone.
-"""
-from __future__ import annotations
 import os
 import argparse
 from typing import Tuple, List, Optional
@@ -16,24 +12,18 @@ import timm
 from datasets import (
     get_cifar10_dataloaders,
     get_cifar10c_loader,
-    build_transform_for_model,  # imported for completeness (not used directly here)
+    build_transform_for_model,
 )
 
 
-# ----------------------------
-# Model utilities
-# ----------------------------
-
-def load_backbone(model_name: str, device: torch.device) -> nn.Module:
-    """Loads a timm model as a feature extractor."""
+def load_backbone(model_name, device):
     model = timm.create_model(model_name, pretrained=True)
     if hasattr(model, "reset_classifier"):
         model.reset_classifier(0)
 
     model.eval().to(device)
 
-    def _forward_features(x: torch.Tensor) -> torch.Tensor:
-        """Gets a pooled representation from a timm model."""
+    def _forward_features(x):
         with torch.no_grad():
             feats = model.forward_features(x)
             if isinstance(feats, dict):
@@ -56,36 +46,41 @@ def load_backbone(model_name: str, device: torch.device) -> nn.Module:
             return feats.mean(dim=tuple(range(2, feats.ndim)))
 
     class Embedder(nn.Module):
-        def __init__(self, body: nn.Module):
+        def __init__(self, body):
             super().__init__()
             self.body = body
 
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
+        def forward(self, x):
             return _forward_features(x)
 
     return Embedder(model).to(device)
 
 
-# ----------------------------
-# Feature extraction routines
-# ----------------------------
-
 @torch.no_grad()
 def extract_from_loader(
-    model: nn.Module,
+    model,
     loader,
-    device: torch.device,
-    use_amp: bool = True,
-    desc: str = "extract",
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Extracts features for a whole dataset.
-    """
+    device,
+    use_amp=True,
+    desc="extract",
+):
     xs, ys = [], []
+    cids, sevs = [], []
+    has_meta = False
     amp_dtype = torch.float16 if device.type == "cuda" else torch.bfloat16
 
     pbar = tqdm(loader, desc=desc)
-    for x, y in pbar:
+    for batch in pbar:
+        if isinstance(batch, (list, tuple)):
+            x = batch[0]
+            y = batch[1]
+            if len(batch) >= 4:
+                has_meta = True
+                cid = batch[2]
+                sev = batch[3]
+        else:
+            raise RuntimeError("Unexpected batch structure from DataLoader")
+
         x = x.to(device, non_blocking=True)
         if use_amp:
             with torch.autocast(device_type=device.type, dtype=amp_dtype):
@@ -94,22 +89,25 @@ def extract_from_loader(
             z = model(x)
         xs.append(z.float().cpu())
         ys.append(y.clone().cpu())
+        if has_meta:
+            cids.append(cid.clone().cpu())
+            sevs.append(sev.clone().cpu())
 
     X = torch.cat(xs, dim=0).numpy()
     Y = torch.cat(ys, dim=0).numpy()
+    if has_meta:
+        C = torch.cat(cids, dim=0).numpy()
+        S = torch.cat(sevs, dim=0).numpy()
+        return X, Y, C, S
     return X, Y
 
 
-def save_features(X: np.ndarray, Y: np.ndarray, out_dir: str, model_name: str, split: str):
+def save_features(X, Y, out_dir, model_name, split):
     model_dir = os.path.join(out_dir, model_name)
     os.makedirs(model_dir, exist_ok=True)
     np.save(os.path.join(model_dir, f"{split}_X.npy"), X)
     np.save(os.path.join(model_dir, f"{split}_y.npy"), Y)
 
-
-# ----------------------------
-# CLI
-# ----------------------------
 
 def parse_args():
     ap = argparse.ArgumentParser(description="Frozen feature extraction for CIFAR-10/10-C")
@@ -123,11 +121,9 @@ def parse_args():
     ap.add_argument("--batch_size", type=int, default=256)
     ap.add_argument("--num_workers", type=int, default=4)
 
-    # For CIFAR-10 splits
     ap.add_argument("--val_size", type=int, default=5000)
     ap.add_argument("--seed", type=int, default=42)
 
-    # For CIFAR-10-C filtering
     ap.add_argument("--corruptions", type=str, nargs="*", default=None,
                     help="subset of corruption names; default uses all available")
     ap.add_argument("--severities", type=int, nargs="*", default=None,
@@ -173,9 +169,30 @@ def main():
             corruptions=args.corruptions,
             severities=args.severities,
         )
-        Xc, yc = extract_from_loader(model, c_loader, device, use_amp=(not args.no_amp), desc="cifar10-c")
+        out = extract_from_loader(model, c_loader, device, use_amp=(not args.no_amp), desc="cifar10-c")
+        if len(out) == 4:
+            Xc, yc, ccids, ssev = out
+        else:
+            Xc, yc = out
+            n = Xc.shape[0]
+            ccids = np.full((n,), -1, dtype=np.int32)
+            ssev = np.full((n,), -1, dtype=np.int32)
+
         save_features(Xc, yc, args.out_dir, args.model, "cifar10c")
-        print(f"[extract_features] Saved CIFAR-10-C features under {os.path.join(args.out_dir, args.model)}")
+
+        model_dir = os.path.join(args.out_dir, args.model)
+        np.save(os.path.join(model_dir, "cifar10c_corruption_ids.npy"), ccids)
+        np.save(os.path.join(model_dir, "cifar10c_severities.npy"), ssev)
+        try:
+            ds = c_loader.dataset
+            meta = {"corruptions": getattr(ds, "corruptions", [])}
+        except Exception:
+            meta = {"corruptions": []}
+        import json as _json
+        with open(os.path.join(model_dir, "cifar10c_meta.json"), "w") as f:
+            _json.dump(meta, f, indent=2)
+
+        print(f"[extract_features] Saved CIFAR-10-C features and metadata under {os.path.join(args.out_dir, args.model)}")
 
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")

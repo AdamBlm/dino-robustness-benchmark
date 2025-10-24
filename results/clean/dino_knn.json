@@ -1,0 +1,16 @@
+{
+  "model": "vit_base_patch14_dinov2.lvd142m",
+  "metric": "cosine",
+  "normalize": true,
+  "use_val_db": true,
+  "k_values": [
+    1,
+    5,
+    20
+  ],
+  "test": {
+    "1": 98.64,
+    "5": 98.73,
+    "20": 98.81
+  }
+}
