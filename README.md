@@ -1,2 +1,5 @@
 # dino-robustness-benchmark
-Benchmarking DINOv2, MoCo-v3, and SimCLR under Distribution Shifts
+Benchmarking DINOv2, Open-AI Clip, and MAE under Distribution Shifts
+
+
+

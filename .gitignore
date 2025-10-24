@@ -1,0 +1,12 @@
+project.md
+venv/
+cache/
+data/
+experiments/
+features/
+logs/
+slurm_logs/
+slurm/
+src/__pycache__/
+*.sh
+
